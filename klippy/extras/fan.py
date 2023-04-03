@@ -70,7 +70,6 @@ class Fan:
             # the specified (read: hardcoded) time, consider it dead and shutdown
             if(self.min_rpm_eventtimer == 0):
                 self.min_rpm_eventtimer = eventtime
-                logging.info("initial timer set at at eventtime: %s", self.min_rpm_eventtimer)
             elif(eventtime > (self.min_rpm_eventtimer + 3)):
                  self.rpm_fault(tachometer_status['rpm'])
         return {
