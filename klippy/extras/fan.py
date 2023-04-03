@@ -10,8 +10,10 @@ FAN_MIN_TIME = 0.100
 class Fan:
     def __init__(self, config, default_shutdown_speed=0.):
         self.printer = config.get_printer()
+        self.name = config.get_name().split()[-1]
         self.last_fan_value = 0.
         self.last_fan_time = 0.
+        self.min_rpm_eventtimer = 0.
         # Read config
         self.max_power = config.getfloat('max_power', 1., above=0., maxval=1.)
         self.kick_start_time = config.getfloat('kick_start_time', 0.1,
@@ -63,10 +65,22 @@ class Fan:
 
     def get_status(self, eventtime):
         tachometer_status = self.tachometer.get_status(eventtime)
+            # If the fan isn't up to speed after the eventtimer increased by
+            # the specified (read: hardcoded) time, consider it dead and shutdown
+            if(self.min_rpm_eventtimer == 0):
+                self.min_rpm_eventtimer = eventtime
+                logging.info("initial timer set at at eventtime: %s", self.min_rpm_eventtimer)
+            elif(eventtime > (self.min_rpm_eventtimer + 3)):
+                 self.rpm_fault(tachometer_status['rpm'])
         return {
             'speed': self.last_fan_value,
             'rpm': tachometer_status['rpm'],
         }
+
+    def rpm_fault(self, rpm):
+        self.printer.invoke_shutdown(
+            "Fan '%s' RPM %.1f is out of range (min %.1f)"
+            % (self.name, rpm, self.tachometer.min_rpm))
 
 class FanTachometer:
     def __init__(self, config):
@@ -74,6 +88,7 @@ class FanTachometer:
         self._freq_counter = None
 
         pin = config.get('tachometer_pin', None)
+        self.min_rpm = config.getfloat('min_rpm', 0., minval=0.);
         if pin is not None:
             self.ppr = config.getint('tachometer_ppr', 2, minval=1)
             poll_time = config.getfloat('tachometer_poll_interval',
@@ -81,6 +96,8 @@ class FanTachometer:
             sample_time = 1.
             self._freq_counter = pulse_counter.FrequencyCounter(
                 printer, pin, sample_time, poll_time)
+        elif self.min_rpm > 0.:
+            raise config.error("Must specify tachometer_pin to use min_rpm")
 
     def get_status(self, eventtime):
         if self._freq_counter is not None:
