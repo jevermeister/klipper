@@ -65,6 +65,7 @@ class Fan:
 
     def get_status(self, eventtime):
         tachometer_status = self.tachometer.get_status(eventtime)
+        if (self.last_fan_value > 0) and (self.tachometer.min_rpm > 0) and (tachometer_status['rpm'] < self.tachometer.min_rpm):
             # If the fan isn't up to speed after the eventtimer increased by
             # the specified (read: hardcoded) time, consider it dead and shutdown
             if(self.min_rpm_eventtimer == 0):
